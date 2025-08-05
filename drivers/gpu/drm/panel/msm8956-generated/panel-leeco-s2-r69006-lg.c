@@ -6,8 +6,8 @@
 #include <linux/backlight.h>
 #include <linux/delay.h>
 #include <linux/gpio/consumer.h>
+#include <linux/mod_devicetable.h>
 #include <linux/module.h>
-#include <linux/of.h>
 #include <linux/regulator/consumer.h>
 
 #include <video/mipi_display.h>
@@ -15,13 +15,18 @@
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_modes.h>
 #include <drm/drm_panel.h>
+#include <drm/drm_probe_helper.h>
 
 struct truly_r69006_5p5lg {
 	struct drm_panel panel;
 	struct mipi_dsi_device *dsi;
-	struct regulator_bulk_data supplies[2];
+	struct regulator_bulk_data *supplies;
 	struct gpio_desc *reset_gpio;
-	bool prepared;
+};
+
+static const struct regulator_bulk_data truly_r69006_5p5lg_supplies[] = {
+	{ .supply = "vsn" },
+	{ .supply = "vsp" },
 };
 
 static inline
@@ -42,129 +47,109 @@ static void truly_r69006_5p5lg_reset(struct truly_r69006_5p5lg *ctx)
 
 static int truly_r69006_5p5lg_on(struct truly_r69006_5p5lg *ctx)
 {
-	struct mipi_dsi_device *dsi = ctx->dsi;
-	struct device *dev = &dsi->dev;
-	int ret;
+	struct mipi_dsi_multi_context dsi_ctx = { .dsi = ctx->dsi };
 
-	dsi->mode_flags |= MIPI_DSI_MODE_LPM;
+	ctx->dsi->mode_flags |= MIPI_DSI_MODE_LPM;
 
-	mipi_dsi_generic_write_seq(dsi, 0xb0, 0x00);
-	mipi_dsi_generic_write_seq(dsi, 0xb3, 0x04, 0x10, 0x00, 0x00, 0x00);
-	mipi_dsi_generic_write_seq(dsi, 0xb4, 0x0c, 0x00);
-	mipi_dsi_generic_write_seq(dsi, 0xb6, 0x3b, 0xd3, 0x00);
-	mipi_dsi_generic_write_seq(dsi, 0xc0, 0x00);
-	mipi_dsi_dcs_write_seq(dsi, MIPI_DCS_SET_ADDRESS_MODE, 0x98);
-	mipi_dsi_generic_write_seq(dsi, 0xcc, 0x04);
-	mipi_dsi_generic_write_seq(dsi, 0xc1,
-				   0x84, 0x00, 0x10, 0xef, 0x8b, 0xf1, 0xff,
-				   0xff, 0xdf, 0x9c, 0xc5, 0x9a, 0x73, 0x8d,
-				   0xad, 0x63, 0xfe, 0xff, 0xff, 0xcb, 0xf8,
-				   0x01, 0x00, 0xaa, 0x40, 0x00, 0xc2, 0x01,
-				   0x08, 0x00, 0x01);
-	mipi_dsi_generic_write_seq(dsi, 0xcb,
-				   0x0d, 0xfe, 0x1f, 0x2c, 0x00, 0x00, 0x00,
-				   0x00, 0x00);
-	mipi_dsi_generic_write_seq(dsi, 0xc2,
-				   0x01, 0xf7, 0x80, 0x04, 0x63, 0x00, 0x60,
-				   0x00, 0x01, 0x30);
-	mipi_dsi_generic_write_seq(dsi, 0xc3,
-				   0x55, 0x01, 0x00, 0x01, 0x00, 0x00);
-	mipi_dsi_generic_write_seq(dsi, 0xc4,
-				   0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-				   0x00, 0x00, 0x02, 0x01, 0x00, 0x05, 0x01,
-				   0x00, 0x00, 0x00);
-	mipi_dsi_generic_write_seq(dsi, 0xc6,
-				   0x59, 0x07, 0x4a, 0x07, 0x4a, 0x01, 0x0e,
-				   0x01, 0x02, 0x01, 0x02, 0x09, 0x15, 0x07);
-	mipi_dsi_generic_write_seq(dsi, 0xc7,
-				   0x00, 0x13, 0x1d, 0x29, 0x39, 0x46, 0x4f,
-				   0x5c, 0x3f, 0x46, 0x51, 0x5d, 0x67, 0x6d,
-				   0x7a, 0x00, 0x13, 0x1d, 0x29, 0x39, 0x46,
-				   0x4f, 0x5c, 0x3f, 0x46, 0x51, 0x5d, 0x67,
-				   0x6d, 0x7a);
-	mipi_dsi_generic_write_seq(dsi, 0xc9,
-				   0x1f, 0x68, 0x1f, 0x68, 0x4c, 0x4c, 0xc4,
-				   0x11);
-	mipi_dsi_generic_write_seq(dsi, 0xd0,
-				   0x33, 0x01, 0x91, 0x0b, 0xd9, 0x19, 0x19,
-				   0x00, 0x00, 0x00, 0x19, 0x99, 0x00, 0x00,
-				   0x00, 0x00);
-	mipi_dsi_generic_write_seq(dsi, 0xd3,
-				   0x1b, 0x3b, 0xbb, 0xad, 0xa5, 0x33, 0x33,
-				   0x33, 0x00, 0x80, 0xad, 0xa8, 0x5b, 0x5b,
-				   0x33, 0x33, 0x33, 0xf7, 0xf2, 0x1f, 0x7d,
-				   0x7c, 0xff, 0x0f, 0x99, 0x00, 0xff, 0xff);
-	mipi_dsi_generic_write_seq(dsi, 0xd4, 0x57, 0x33, 0x03);
-	mipi_dsi_generic_write_seq(dsi, 0xd5,
-				   0x66, 0x00, 0x00, 0x01, 0x33, 0x01, 0x33,
-				   0x00, 0x43, 0x00, 0x43);
-	mipi_dsi_generic_write_seq(dsi, 0xbe, 0x04);
-	mipi_dsi_generic_write_seq(dsi, 0xcf,
-				   0x40, 0x10, 0x00, 0x00, 0x00, 0x00, 0x32,
-				   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-				   0x00, 0x00);
-	mipi_dsi_generic_write_seq(dsi, 0xde, 0x00, 0x00, 0x3f, 0xff, 0x10);
-	mipi_dsi_generic_write_seq(dsi, 0xe9, 0x00);
-	mipi_dsi_generic_write_seq(dsi, 0xf2, 0x00);
-	mipi_dsi_generic_write_seq(dsi, 0xd6, 0x01);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xb0, 0x00);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xb3,
+					 0x04, 0x10, 0x00, 0x00, 0x00);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xb4, 0x0c, 0x00);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xb6, 0x3b, 0xd3, 0x00);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xc0, 0x00);
+	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, MIPI_DCS_SET_ADDRESS_MODE, 0x98);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xcc, 0x04);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xc1,
+					 0x84, 0x00, 0x10, 0xef, 0x8b, 0xf1,
+					 0xff, 0xff, 0xdf, 0x9c, 0xc5, 0x9a,
+					 0x73, 0x8d, 0xad, 0x63, 0xfe, 0xff,
+					 0xff, 0xcb, 0xf8, 0x01, 0x00, 0xaa,
+					 0x40, 0x00, 0xc2, 0x01, 0x08, 0x00,
+					 0x01);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xcb,
+					 0x0d, 0xfe, 0x1f, 0x2c, 0x00, 0x00,
+					 0x00, 0x00, 0x00);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xc2,
+					 0x01, 0xf7, 0x80, 0x04, 0x63, 0x00,
+					 0x60, 0x00, 0x01, 0x30);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xc3,
+					 0x55, 0x01, 0x00, 0x01, 0x00, 0x00);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xc4,
+					 0x70, 0x00, 0x00, 0x00, 0x00, 0x00,
+					 0x00, 0x00, 0x00, 0x02, 0x01, 0x00,
+					 0x05, 0x01, 0x00, 0x00, 0x00);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xc6,
+					 0x59, 0x07, 0x4a, 0x07, 0x4a, 0x01,
+					 0x0e, 0x01, 0x02, 0x01, 0x02, 0x09,
+					 0x15, 0x07);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xc7,
+					 0x00, 0x13, 0x1d, 0x29, 0x39, 0x46,
+					 0x4f, 0x5c, 0x3f, 0x46, 0x51, 0x5d,
+					 0x67, 0x6d, 0x7a, 0x00, 0x13, 0x1d,
+					 0x29, 0x39, 0x46, 0x4f, 0x5c, 0x3f,
+					 0x46, 0x51, 0x5d, 0x67, 0x6d, 0x7a);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xc9,
+					 0x1f, 0x68, 0x1f, 0x68, 0x4c, 0x4c,
+					 0xc4, 0x11);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xd0,
+					 0x33, 0x01, 0x91, 0x0b, 0xd9, 0x19,
+					 0x19, 0x00, 0x00, 0x00, 0x19, 0x99,
+					 0x00, 0x00, 0x00, 0x00);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xd3,
+					 0x1b, 0x3b, 0xbb, 0xad, 0xa5, 0x33,
+					 0x33, 0x33, 0x00, 0x80, 0xad, 0xa8,
+					 0x5b, 0x5b, 0x33, 0x33, 0x33, 0xf7,
+					 0xf2, 0x1f, 0x7d, 0x7c, 0xff, 0x0f,
+					 0x99, 0x00, 0xff, 0xff);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xd4, 0x57, 0x33, 0x03);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xd5,
+					 0x66, 0x00, 0x00, 0x01, 0x33, 0x01,
+					 0x33, 0x00, 0x43, 0x00, 0x43);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xbe, 0x04);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xcf,
+					 0x40, 0x10, 0x00, 0x00, 0x00, 0x00,
+					 0x32, 0x00, 0x00, 0x00, 0x00, 0x00,
+					 0x00, 0x00, 0x00, 0x00);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xde,
+					 0x00, 0x00, 0x3f, 0xff, 0x10);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xe9, 0x00);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xf2, 0x00);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xd6, 0x01);
+	mipi_dsi_dcs_set_tear_on_multi(&dsi_ctx, MIPI_DSI_DCS_TEAR_MODE_VBLANK);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xce,
+					 0x75, 0x40, 0x43, 0x49, 0x55, 0x62,
+					 0x71, 0x82, 0x94, 0xa8, 0xb9, 0xcb,
+					 0xdb, 0xe9, 0xf5, 0xfc, 0xff, 0x05,
+					 0x00, 0x22, 0x05, 0x00, 0x24);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xba,
+					 0x03, 0x70, 0x81, 0x20, 0x45, 0xb4);
+	mipi_dsi_dcs_set_display_brightness_multi(&dsi_ctx, 0x0000);
+	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x11, 0x00);
+	mipi_dsi_msleep(&dsi_ctx, 120);
+	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x29, 0x00);
+	mipi_dsi_msleep(&dsi_ctx, 26);
 
-	ret = mipi_dsi_dcs_set_tear_on(dsi, MIPI_DSI_DCS_TEAR_MODE_VBLANK);
-	if (ret < 0) {
-		dev_err(dev, "Failed to set tear on: %d\n", ret);
-		return ret;
-	}
-
-	mipi_dsi_generic_write_seq(dsi, 0xce,
-				   0x75, 0x40, 0x43, 0x49, 0x55, 0x62, 0x71,
-				   0x82, 0x94, 0xa8, 0xb9, 0xcb, 0xdb, 0xe9,
-				   0xf5, 0xfc, 0xff, 0x05, 0x00, 0x22, 0x05,
-				   0x00, 0x24);
-	mipi_dsi_generic_write_seq(dsi, 0xba,
-				   0x03, 0x70, 0x81, 0x20, 0x45, 0xb4);
-
-	ret = mipi_dsi_dcs_set_display_brightness(dsi, 0x0000);
-	if (ret < 0) {
-		dev_err(dev, "Failed to set display brightness: %d\n", ret);
-		return ret;
-	}
-
-	mipi_dsi_dcs_write_seq(dsi, 0x11, 0x00);
-	msleep(120);
-	mipi_dsi_dcs_write_seq(dsi, 0x29, 0x00);
-	msleep(26);
-
-	return 0;
+	return dsi_ctx.accum_err;
 }
 
 static int truly_r69006_5p5lg_off(struct truly_r69006_5p5lg *ctx)
 {
-	struct mipi_dsi_device *dsi = ctx->dsi;
-	struct device *dev = &dsi->dev;
-	int ret;
+	struct mipi_dsi_multi_context dsi_ctx = { .dsi = ctx->dsi };
 
-	dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
+	ctx->dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
 
-	ret = mipi_dsi_dcs_set_display_off(dsi);
-	if (ret < 0) {
-		dev_err(dev, "Failed to set display off: %d\n", ret);
-		return ret;
-	}
-	usleep_range(10000, 11000);
+	mipi_dsi_dcs_set_display_off_multi(&dsi_ctx);
+	mipi_dsi_usleep_range(&dsi_ctx, 10000, 11000);
+	mipi_dsi_generic_write_seq_multi(&dsi_ctx, 0xd3,
+					 0x13, 0x3b, 0xbb, 0xa5, 0xa5, 0x33,
+					 0x33, 0x33, 0x00, 0x80, 0xa4, 0xa8,
+					 0x37, 0x33, 0x33, 0x33, 0x33, 0xf7,
+					 0xf2, 0x1f, 0x7d, 0x7c, 0xff, 0x0f,
+					 0x99, 0x00, 0xff, 0xff);
+	mipi_dsi_dcs_enter_sleep_mode_multi(&dsi_ctx);
+	mipi_dsi_msleep(&dsi_ctx, 90);
 
-	mipi_dsi_generic_write_seq(dsi, 0xd3,
-				   0x13, 0x3b, 0xbb, 0xa5, 0xa5, 0x33, 0x33,
-				   0x33, 0x00, 0x80, 0xa4, 0xa8, 0x37, 0x33,
-				   0x33, 0x33, 0x33, 0xf7, 0xf2, 0x1f, 0x7d,
-				   0x7c, 0xff, 0x0f, 0x99, 0x00, 0xff, 0xff);
-
-	ret = mipi_dsi_dcs_enter_sleep_mode(dsi);
-	if (ret < 0) {
-		dev_err(dev, "Failed to enter sleep mode: %d\n", ret);
-		return ret;
-	}
-	msleep(90);
-
-	return 0;
+	return dsi_ctx.accum_err;
 }
 
 static int truly_r69006_5p5lg_prepare(struct drm_panel *panel)
@@ -173,10 +158,7 @@ static int truly_r69006_5p5lg_prepare(struct drm_panel *panel)
 	struct device *dev = &ctx->dsi->dev;
 	int ret;
 
-	if (ctx->prepared)
-		return 0;
-
-	ret = regulator_bulk_enable(ARRAY_SIZE(ctx->supplies), ctx->supplies);
+	ret = regulator_bulk_enable(ARRAY_SIZE(truly_r69006_5p5lg_supplies), ctx->supplies);
 	if (ret < 0) {
 		dev_err(dev, "Failed to enable regulators: %d\n", ret);
 		return ret;
@@ -188,11 +170,10 @@ static int truly_r69006_5p5lg_prepare(struct drm_panel *panel)
 	if (ret < 0) {
 		dev_err(dev, "Failed to initialize panel: %d\n", ret);
 		gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-		regulator_bulk_disable(ARRAY_SIZE(ctx->supplies), ctx->supplies);
+		regulator_bulk_disable(ARRAY_SIZE(truly_r69006_5p5lg_supplies), ctx->supplies);
 		return ret;
 	}
 
-	ctx->prepared = true;
 	return 0;
 }
 
@@ -202,17 +183,13 @@ static int truly_r69006_5p5lg_unprepare(struct drm_panel *panel)
 	struct device *dev = &ctx->dsi->dev;
 	int ret;
 
-	if (!ctx->prepared)
-		return 0;
-
 	ret = truly_r69006_5p5lg_off(ctx);
 	if (ret < 0)
 		dev_err(dev, "Failed to un-initialize panel: %d\n", ret);
 
 	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-	regulator_bulk_disable(ARRAY_SIZE(ctx->supplies), ctx->supplies);
+	regulator_bulk_disable(ARRAY_SIZE(truly_r69006_5p5lg_supplies), ctx->supplies);
 
-	ctx->prepared = false;
 	return 0;
 }
 
@@ -228,25 +205,13 @@ static const struct drm_display_mode truly_r69006_5p5lg_mode = {
 	.vtotal = 1920 + 8 + 2 + 10,
 	.width_mm = 69,
 	.height_mm = 122,
+	.type = DRM_MODE_TYPE_DRIVER,
 };
 
 static int truly_r69006_5p5lg_get_modes(struct drm_panel *panel,
 					struct drm_connector *connector)
 {
-	struct drm_display_mode *mode;
-
-	mode = drm_mode_duplicate(connector->dev, &truly_r69006_5p5lg_mode);
-	if (!mode)
-		return -ENOMEM;
-
-	drm_mode_set_name(mode);
-
-	mode->type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
-	connector->display_info.width_mm = mode->width_mm;
-	connector->display_info.height_mm = mode->height_mm;
-	drm_mode_probed_add(connector, mode);
-
-	return 1;
+	return drm_connector_helper_get_modes_fixed(connector, &truly_r69006_5p5lg_mode);
 }
 
 static const struct drm_panel_funcs truly_r69006_5p5lg_panel_funcs = {
@@ -316,16 +281,18 @@ static int truly_r69006_5p5lg_probe(struct mipi_dsi_device *dsi)
 	struct truly_r69006_5p5lg *ctx;
 	int ret;
 
-	ctx = devm_kzalloc(dev, sizeof(*ctx), GFP_KERNEL);
-	if (!ctx)
-		return -ENOMEM;
+	ctx = devm_drm_panel_alloc(dev, struct truly_r69006_5p5lg, panel,
+				   &truly_r69006_5p5lg_panel_funcs,
+				   DRM_MODE_CONNECTOR_DSI);
+	if (IS_ERR(ctx))
+		return PTR_ERR(ctx);
 
-	ctx->supplies[0].supply = "vsn";
-	ctx->supplies[1].supply = "vsp";
-	ret = devm_regulator_bulk_get(dev, ARRAY_SIZE(ctx->supplies),
-				      ctx->supplies);
+	ret = devm_regulator_bulk_get_const(dev,
+					    ARRAY_SIZE(truly_r69006_5p5lg_supplies),
+					    truly_r69006_5p5lg_supplies,
+					    &ctx->supplies);
 	if (ret < 0)
-		return dev_err_probe(dev, ret, "Failed to get regulators\n");
+		return ret;
 
 	ctx->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
 	if (IS_ERR(ctx->reset_gpio))
@@ -341,8 +308,6 @@ static int truly_r69006_5p5lg_probe(struct mipi_dsi_device *dsi)
 			  MIPI_DSI_MODE_NO_EOT_PACKET |
 			  MIPI_DSI_CLOCK_NON_CONTINUOUS;
 
-	drm_panel_init(&ctx->panel, dev, &truly_r69006_5p5lg_panel_funcs,
-		       DRM_MODE_CONNECTOR_DSI);
 	ctx->panel.prepare_prev_first = true;
 
 	ctx->panel.backlight = truly_r69006_5p5lg_create_backlight(dsi);
@@ -354,9 +319,8 @@ static int truly_r69006_5p5lg_probe(struct mipi_dsi_device *dsi)
 
 	ret = mipi_dsi_attach(dsi);
 	if (ret < 0) {
-		dev_err(dev, "Failed to attach to DSI host: %d\n", ret);
 		drm_panel_remove(&ctx->panel);
-		return ret;
+		return dev_err_probe(dev, ret, "Failed to attach to DSI host\n");
 	}
 
 	return 0;

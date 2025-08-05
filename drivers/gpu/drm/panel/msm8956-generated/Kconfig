@@ -5,6 +5,18 @@ menu "MSM8956 panel drivers generated with linux-mdss-dsi-panel-driver-generator
 config DRM_PANEL_MSM8956_GENERATED
 	tristate "Select all generated MSM8956 panel drivers by default"
 
+config DRM_PANEL_LEECO_S2_NT35596S_BOE
+	tristate "Leeco S2 NT35596S BOE"
+	default DRM_PANEL_MSM8956_GENERATED
+
+config DRM_PANEL_LEECO_S2_NT36760_BOE
+	tristate "Leeco S2 NT36760 BOE"
+	default DRM_PANEL_MSM8956_GENERATED
+
+config DRM_PANEL_LEECO_S2_R69006_LG
+	tristate "Leeco S2 R69006 LG"
+	default DRM_PANEL_MSM8956_GENERATED
+
 config DRM_PANEL_LONGCHEER_L9360_HX8399B
 	tristate "Longcheer L9360 HX8399B"
 	default DRM_PANEL_MSM8956_GENERATED

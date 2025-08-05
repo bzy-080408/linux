@@ -1,3 +1,6 @@
+obj-$(CONFIG_DRM_PANEL_LEECO_S2_NT35596S_BOE) += panel-leeco-s2-nt35596s-boe.o
+obj-$(CONFIG_DRM_PANEL_LEECO_S2_NT36760_BOE) += panel-leeco-s2-nt36760-boe.o
+obj-$(CONFIG_DRM_PANEL_LEECO_S2_R69006_LG) += panel-leeco-s2-r69006-lg.o
 obj-$(CONFIG_DRM_PANEL_LONGCHEER_L9360_HX8399B) += panel-longcheer-l9360-hx8399b.o
 obj-$(CONFIG_DRM_PANEL_LONGCHEER_L9360_HX8399C) += panel-longcheer-l9360-hx8399c.o
 obj-$(CONFIG_DRM_PANEL_LONGCHEER_L9360_NT35695) += panel-longcheer-l9360-nt35695.o

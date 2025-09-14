@@ -88,6 +88,15 @@
 		regulator-always-on;
 		regulator-boot-on;
 	};
+
+	vreg_tp_vdig: vreg-tp-vdig {
+		compatible = "regulator-fixed";
+		regulator-name = "vreg_tp_vdig";
+		regulator-max-microvolt = <3050000>;
+		regulator-min-microvolt = <3050000>;
+		enable-active-high;
+		gpio = <&tlmm 48 GPIO_ACTIVE_HIGH>;
+	};
 };
 
 &hsusb_phy {
@@ -122,7 +131,7 @@
 		status = "okay";
 	};
 
-	rmi4_ts: touchscreen@70 {         // cannot use now
+	rmi4_ts: touchscreen@70 {
 		reg = <0x70>;
 		compatible = "syna,rmi4-i2c";
 		interrupts-parent = <&tlmm>;
@@ -131,7 +140,7 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		vdd-supply = <&pm8953_l10>;
+		vdd-supply = <&vreg_tp_vdig>;
 		vio-supply = <&pm8953_l6>;
 
 		pinctrl-0 = <&ts_reset_active &ts_int_active>;
@@ -141,7 +150,7 @@
 		syna,reset-delay-ms = <200>;
 		syna,startup-delay-ms = <500>;
 
-		status = "disabled";
+		status = "okay";
 
 		rmi4-f01@1 {
 			reg = <0x01>;
